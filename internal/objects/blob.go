@@ -1,6 +1,10 @@
 package objects
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+	"strings"
+)
 
 // Blob represents the file's content in Git
 // Blob stores the raw data of a file without any metadata like filename or permissions
@@ -11,19 +15,14 @@ type Blob struct {
 
 // Create a new Blob object with the given content
 func NewBlob(content []byte) *Blob {
-	if content == nil {
-		content = []byte{}
-	}
-
 	blob := &Blob{
 		BaseObject: &BaseObject{
-			ObjectType:    BlobType,
-			ObjectContent: make([]byte, len(content)),
+			objectType:    BlobType,
+			objectContent: bytes.Clone(content),
 		},
 	}
 
-	copy(blob.ObjectContent, content)
-	blob.hash = blob.Hash()
+	blob.hash = blob.BaseObject.Hash()
 
 	return blob
 }
@@ -36,8 +35,11 @@ func (b *Blob) String() string {
 
 	content := string(b.Content())
 	if len(content) > 100 {
-		content = content[:100] + "..."
+		runes := []rune(content)
+		content = string(runes[:100]) + "..."
 	}
+
+	content = strings.ReplaceAll(content, "\n", "\\n")
 
 	return fmt.Sprintf("Blob{Hash: %s, Size: %d, Content: %q}", b.hash[:8], len(b.Content()), content)
 }
@@ -57,12 +59,12 @@ func (b *Blob) IsEmpty() bool {
 }
 
 // Compares two blobs for equality based on their hash
-func (b *Blob) Equals(blob *Blob) bool {
-	if b == nil || blob == nil || b.BaseObject == nil || blob.BaseObject == nil {
-		return false
+func (b *Blob) Equals(other *Blob) bool {
+	if b == nil || other == nil {
+		return b == other
 	}
 
-	return b.Hash() == blob.Hash()
+	return b.hash == other.hash
 }
 
 // Creates a deep clone of the blob
@@ -79,12 +81,6 @@ func (b *Blob) Hash() string {
 	if b == nil || b.BaseObject == nil {
 		return ""
 	}
-
-	if b.hash != "" {
-		return b.hash
-	}
-
-	b.hash = b.BaseObject.Hash()
 
 	return b.hash
 }

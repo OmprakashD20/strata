@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 )
 
 type GitObject interface {
@@ -17,18 +19,18 @@ type GitObject interface {
 }
 
 type BaseObject struct {
-	ObjectType    string // blob, tree, commit, tag
-	ObjectContent []byte
+	objectType    string // blob, tree, commit, tag
+	objectContent []byte
 }
 
 // Returns the type of the object (blob, tree, commit, tag)
 func (obj *BaseObject) Type() string {
-	return obj.ObjectType
+	return obj.objectType
 }
 
 // Returns the raw content of the object
 func (obj *BaseObject) Content() []byte {
-	return obj.ObjectContent
+	return obj.objectContent
 }
 
 // Hash generates SHA-1 hash following Git's format: SHA-1(<type> <size>\0<content>)
@@ -55,19 +57,19 @@ func (obj *BaseObject) Serialize() ([]byte, error) {
 		return nil, fmt.Errorf("failed to write header: %v", err)
 	}
 
-	if _, err := writer.Write(obj.ObjectContent); err != nil {
+	if _, err := writer.Write(obj.Content()); err != nil {
 		return nil, fmt.Errorf("failed to write content: %v", err)
 	}
 
 	if err := writer.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close zlib writer: %v", err)
 	}
-	
+
 	return buffer.Bytes(), nil
 }
 
 // Deserialize decompresses and reconstructs a GitObject from its serialized form
-func Deserialize(data []byte) (GitObject, error){
+func Deserialize(data []byte) (GitObject, error) {
 	// decompress the data using zlib
 	reader, err := zlib.NewReader(bytes.NewReader(data))
 	if err != nil {
@@ -92,13 +94,17 @@ func Deserialize(data []byte) (GitObject, error){
 	content := decompressedData[nullIndex+1:]
 
 	// parse the header to extract type and size
-	headerParts := bytes.SplitN([]byte(header), []byte(" "), 2)
+	headerParts := strings.SplitN(header, " ", 2)
 	if len(headerParts) != 2 {
 		return nil, fmt.Errorf("invalid object header format: %s", header)
 	}
 
-	objectType := string(headerParts[0])
+	objectType := headerParts[0]
+	if size, err := strconv.Atoi(headerParts[1]); err != nil || size != len(content) {
+		return nil, fmt.Errorf("content size mismatch: expected %s, got %d", headerParts[1], len(content))
+	}
 
+	// todo: implement for other object types (tree, commit, tag)
 	// create the GitObject based on the type
 	switch objectType {
 	case BlobType:
@@ -110,7 +116,7 @@ func Deserialize(data []byte) (GitObject, error){
 
 const (
 	BlobType   = "blob"
-	TreeType   = "tree"  
+	TreeType   = "tree"
 	CommitType = "commit"
 	TagType    = "tag"
 )
