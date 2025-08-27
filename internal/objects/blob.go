@@ -10,7 +10,6 @@ import (
 // Blob stores the raw data of a file without any metadata like filename or permissions
 type Blob struct {
 	*BaseObject
-	hash string
 }
 
 // Create a new Blob object with the given content
@@ -21,8 +20,6 @@ func NewBlob(content []byte) *Blob {
 			objectContent: bytes.Clone(content),
 		},
 	}
-
-	blob.hash = blob.BaseObject.Hash()
 
 	return blob
 }
@@ -41,7 +38,7 @@ func (b *Blob) String() string {
 
 	content = strings.ReplaceAll(content, "\n", "\\n")
 
-	return fmt.Sprintf("Blob{Hash: %s, Size: %d, Content: %q}", b.hash[:8], len(b.Content()), content)
+	return fmt.Sprintf("Blob{Hash: %s, Size: %d, Content: %q}", b.Hash()[:8], len(b.Content()), content)
 }
 
 // Returns the size of the blob content in bytes
@@ -56,33 +53,6 @@ func (b *Blob) Size() int {
 // Checks if the blob is empty
 func (b *Blob) IsEmpty() bool {
 	return b.Size() == 0
-}
-
-// Compares two blobs for equality based on their hash
-func (b *Blob) Equals(other *Blob) bool {
-	if b == nil || other == nil {
-		return b == other
-	}
-
-	return b.hash == other.hash
-}
-
-// Creates a deep clone of the blob
-func (b *Blob) Clone() *Blob {
-	if b == nil || b.BaseObject == nil {
-		return NewBlob(nil)
-	}
-
-	return NewBlob(b.Content())
-}
-
-// Returns the SHA-1 hash of the blob
-func (b *Blob) Hash() string {
-	if b == nil || b.BaseObject == nil {
-		return ""
-	}
-
-	return b.hash
 }
 
 // ensures Blob implements the GitObject interface

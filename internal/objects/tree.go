@@ -19,7 +19,6 @@ type TreeEntry struct {
 type Tree struct {
 	*BaseObject
 	entries []TreeEntry
-	hash    string
 }
 
 // BuildTree constructs a Tree from a slice of Tree entries
@@ -39,7 +38,6 @@ func BuildTree(entries []TreeEntry) (*Tree, error) {
 	}
 
 	tree.objectContent = serializeTree(tree)
-	tree.hash = tree.BaseObject.Hash()
 
 	return tree, nil
 }
@@ -55,8 +53,6 @@ func ParseTree(content []byte) (*Tree, error) {
 		objectType:    TreeType,
 		objectContent: bytes.Clone(content),
 	}
-
-	tree.hash = tree.BaseObject.Hash()
 
 	return tree, nil
 }
@@ -82,7 +78,6 @@ func (t *Tree) MakeEntry(mode, name, hash string) error {
 	// else, append
 	t.entries = append(t.entries, entry)
 	t.objectContent = serializeTree(t)
-	t.hash = t.BaseObject.Hash()
 
 	return nil
 }
@@ -99,14 +94,6 @@ func (t *Tree) Entries() []TreeEntry {
 	return entries
 }
 
-// Returns the SHA-1 hash of the tree
-func (t *Tree) Hash() string {
-	if t == nil {
-		return ""
-	}
-	return t.hash
-}
-
 // Checks if the tree is empty or has no entries
 func (t *Tree) IsEmpty() bool {
 	return t == nil || len(t.entries) == 0
@@ -118,31 +105,7 @@ func (t *Tree) String() string {
 		return "Tree{nil}"
 	}
 
-	return fmt.Sprintf("Tree{hash: %s, entries: %d}", t.hash[:8], len(t.entries))
-}
-
-// Compares two trees for equality based on their hash
-func (t *Tree) Equals(other *Tree) bool {
-	if t == nil || other == nil {
-		return t == other
-	}
-
-	return t.hash == other.hash
-}
-
-// Creates a deep clone of the tree
-func (t *Tree) Clone() *Tree {
-	if t == nil || t.BaseObject == nil {
-		if tree, err := BuildTree(nil); err == nil {
-			return tree
-		}
-		return nil
-	}
-
-	entries := make([]TreeEntry, len(t.entries))
-	copy(entries, t.entries)
-	clone, _ := BuildTree(entries)
-	return clone
+	return fmt.Sprintf("Tree{hash: %s, entries: %d}", t.Hash()[:8], len(t.entries))
 }
 
 // Encodes the slice of entries into raw tree entry format: "<mode> <name>\0<20-byte raw sha1>"

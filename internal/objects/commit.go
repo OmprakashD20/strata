@@ -58,7 +58,6 @@ type Commit struct {
 	Author       *User
 	Committer    *User
 	Message      string // commit message
-	hash         string // sha-1 hash of the commit object
 }
 
 // Build a new Commit object
@@ -86,9 +85,6 @@ func BuildCommit(treeHash string, parentHashes []string, author, committer *User
 		objectContent: content,
 	}
 
-	// cache the sha-1 hash of the commit object
-	commit.hash = commit.BaseObject.Hash()
-
 	return commit, nil
 }
 
@@ -103,8 +99,6 @@ func ParseCommit(content []byte) (*Commit, error) {
 		objectType:    CommitType,
 		objectContent: bytes.Clone(content),
 	}
-
-	commit.hash = commit.BaseObject.Hash()
 
 	return commit, nil
 
@@ -160,28 +154,6 @@ func (c *Commit) CommitHeader() string {
 	return lines[0]
 }
 
-// Compares two commits for equality based on their hash
-func (c *Commit) Equals(other *Commit) bool {
-	if c == nil || other == nil {
-		return c == other
-	}
-	return c.hash == other.hash
-}
-
-// Creates a deep clone of the commit
-func (c *Commit) Clone() *Commit {
-	if c == nil || c.BaseObject == nil {
-		if commit, err := BuildCommit("", nil, nil, nil, ""); err == nil {
-			return commit
-		}
-		return nil
-	}
-	parents := make([]string, len(c.ParentHashes))
-	copy(parents, c.ParentHashes)
-	clone, _ := BuildCommit(c.TreeHash, parents, c.Author, c.Committer, c.Message)
-	return clone
-}
-
 // Returns a string representation of the commit
 func (c *Commit) String() string {
 	if c == nil {
@@ -195,7 +167,7 @@ func (c *Commit) String() string {
 		parentInfo = fmt.Sprintf("%d parents", len(c.ParentHashes))
 	}
 
-	return fmt.Sprintf("Commit{hash: %s, tree: %s, parents: %s, author: %s, committer: %s, message: %.30q}", c.hash[:8], c.TreeHash[:8], parentInfo, c.Author, c.Committer, c.CommitHeader())
+	return fmt.Sprintf("Commit{hash: %s, tree: %s, parents: %s, author: %s, committer: %s, message: %.30q}", c.Hash()[:8], c.TreeHash[:8], parentInfo, c.Author, c.Committer, c.CommitHeader())
 
 }
 
