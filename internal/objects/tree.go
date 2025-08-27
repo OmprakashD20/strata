@@ -23,18 +23,16 @@ type Tree struct {
 
 // BuildTree constructs a Tree from a slice of Tree entries
 func BuildTree(entries []TreeEntry) (*Tree, error) {
-	// validate the tree entries
-	for _, entry := range entries {
-		if err := validateTreeEntry(entry); err != nil {
-			return nil, fmt.Errorf("invalid tree entry %s: %v", entry.Name, err)
-		}
-	}
-
 	tree := &Tree{
 		BaseObject: &BaseObject{
 			objectType: TreeType,
 		},
 		entries: entries,
+	}
+
+	// validate the tree entries
+	if err := validateTree(tree); err != nil {
+		return nil, err
 	}
 
 	tree.objectContent = serializeTree(tree)
@@ -61,8 +59,7 @@ func ParseTree(content []byte) (*Tree, error) {
 func (t *Tree) MakeEntry(mode, name, hash string) error {
 	entry := TreeEntry{Mode: mode, Name: name, Hash: hash}
 
-	// validate the entry
-	if err := validateTreeEntry(entry); err != nil {
+	if err := validateTree(t); err != nil {
 		return err
 	}
 
@@ -171,26 +168,40 @@ func deserializeTree(content []byte) (*Tree, error) {
 }
 
 /*
-validateTreeEntry checks that an entry is valid according to Git rules:
+validateTree checks that a tree's entries are valid, according to Git rules:
   - Name is non-empty and cannot contain '/'
   - Hash is exactly 40 hex chars
   - Mode is one of Git's supported ones (file, executable, directory)
 */
-func validateTreeEntry(entry TreeEntry) error {
-	if entry.Name == "" {
-		return fmt.Errorf("name cannot be empty")
+func validateTree(tree *Tree) error {
+	for _, entry := range tree.Entries() {
+		var errorMsgs []string
+
+		// Validate Name
+		if entry.Name == "" {
+			errorMsgs = append(errorMsgs, "name cannot be empty")
+		} else if strings.Contains(entry.Name, "/") {
+			errorMsgs = append(errorMsgs, "name cannot contain '/' (use subtrees)")
+		}
+
+		// Validate Hash
+		if len(entry.Hash) != 40 {
+			errorMsgs = append(errorMsgs, fmt.Sprintf("hash must be 40 hex chars (got %d)", len(entry.Hash)))
+		}
+
+		// Validate Mode
+		switch entry.Mode {
+		case "100644", "100755", "40000": // file, executable, directory
+		default:
+			errorMsgs = append(errorMsgs, fmt.Sprintf("invalid mode %s", entry.Mode))
+		}
+
+		if len(errorMsgs) > 0 {
+			return fmt.Errorf("invalid tree entry %s: %s", entry.Name, strings.Join(errorMsgs, "; "))
+		}
 	}
-	if strings.Contains(entry.Name, "/") {
-		return fmt.Errorf("name cannot contain '/' (use subtrees)")
-	}
-	if len(entry.Hash) != 40 {
-		return fmt.Errorf("hash must be 40 hex chars (got %d)", len(entry.Hash))
-	}
-	switch entry.Mode {
-	case "100644", "100755", "40000": // file, executable, directory
-	default:
-		return fmt.Errorf("invalid mode %s", entry.Mode)
-	}
+
+	// Return nil if everything is valid
 	return nil
 }
 
