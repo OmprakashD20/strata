@@ -3,6 +3,7 @@ package objects
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,19 +18,32 @@ type User struct {
 	TZ        string // time zone of the user
 }
 
-func (u User) String() string {
+func (u *User) String() string {
+	if u == nil {
+		return "User{nil}"
+	}
+
 	return fmt.Sprintf("%s %d %s", u.Info, u.Timestamp, u.TZ)
 }
 
-func (u User) validate() error {
-	if u.Info == "" {
-		return fmt.Errorf("user info is required")
+func validateUser(user *User) error {
+	if user == nil {
+		return fmt.Errorf("user required")
 	}
-	if u.Timestamp == 0 {
-		return fmt.Errorf("user timestamp is required")
+	pattern := `^[A-Za-z\s]+ <[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}>$`
+	re := regexp.MustCompile(pattern)
+
+	if user.Info == "" {
+		return fmt.Errorf("user info required")
 	}
-	if u.TZ == "" {
-		return fmt.Errorf("user timezone is required")
+	if !re.MatchString(user.Info) {
+		return fmt.Errorf("user info must match the format: name <email>")
+	}
+	if user.Timestamp == 0 {
+		return fmt.Errorf("user timestamp required")
+	}
+	if user.TZ == "" {
+		return fmt.Errorf("user timezone required")
 	}
 
 	return nil
@@ -41,15 +55,15 @@ type Commit struct {
 	*BaseObject
 	TreeHash     string   // sha-1 hash of the tree object (directory snapshot)
 	ParentHashes []string // sha-1 hashes of parent commits
-	Author       User
-	Committer    User
+	Author       *User
+	Committer    *User
 	Message      string // commit message
 	hash         string // sha-1 hash of the commit object
 }
 
 // Build a new Commit object
-func BuildCommit(treeHash string, parentHashes []string, author, committer User, message string) (*Commit, error) {
-	if committer.Info == "" {
+func BuildCommit(treeHash string, parentHashes []string, author, committer *User, message string) (*Commit, error) {
+	if committer == nil {
 		committer = author
 	}
 
@@ -62,11 +76,11 @@ func BuildCommit(treeHash string, parentHashes []string, author, committer User,
 	}
 
 	// validate the fields
-	if err := commit.validate(); err != nil {
+	if err := validateCommit(commit); err != nil {
 		return nil, err
 	}
 
-	content := serialize(commit)
+	content := serializeCommit(commit)
 	commit.BaseObject = &BaseObject{
 		objectType:    CommitType,
 		objectContent: content,
@@ -80,7 +94,7 @@ func BuildCommit(treeHash string, parentHashes []string, author, committer User,
 
 // ParseCommit creates a new Commit from serialized commit content
 func ParseCommit(content []byte) (*Commit, error) {
-	commit, err := deserialize(content)
+	commit, err := deserializeCommit(content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse commit: %w", err)
 	}
@@ -109,7 +123,7 @@ func (c *Commit) AddParent(parentHash string) error {
 
 	c.ParentHashes = append(c.ParentHashes, parentHash)
 
-	c.objectContent = serialize(c)
+	c.objectContent = serializeCommit(c)
 	return nil
 }
 
@@ -133,6 +147,10 @@ func (c *Commit) FirstParent() *string {
 
 // Returns the commit message header
 func (c *Commit) CommitHeader() string {
+	if c == nil {
+		return ""
+	}
+
 	lines := strings.SplitN(c.Message, "\n", 2)
 
 	if len(lines) == 0 {
@@ -153,7 +171,7 @@ func (c *Commit) Equals(other *Commit) bool {
 // Creates a deep clone of the commit
 func (c *Commit) Clone() *Commit {
 	if c == nil || c.BaseObject == nil {
-		if commit, err := BuildCommit("", nil, User{}, User{}, ""); err == nil {
+		if commit, err := BuildCommit("", nil, nil, nil, ""); err == nil {
 			return commit
 		}
 		return nil
@@ -177,11 +195,11 @@ func (c *Commit) String() string {
 		parentInfo = fmt.Sprintf("%d parents", len(c.ParentHashes))
 	}
 
-	return fmt.Sprintf("Commit{tree: %s, parents: %s, author: %s, committer: %s, message: %.30q}", c.TreeHash[:8], parentInfo, c.Author, c.Committer, c.CommitHeader())
+	return fmt.Sprintf("Commit{hash: %s, tree: %s, parents: %s, author: %s, committer: %s, message: %.30q}", c.hash[:8], c.TreeHash[:8], parentInfo, c.Author, c.Committer, c.CommitHeader())
 
 }
 
-func serialize(c *Commit) []byte {
+func serializeCommit(c *Commit) []byte {
 	var buffer bytes.Buffer
 	buffer.WriteString(fmt.Sprintf("tree %s\n", c.TreeHash))
 	for _, parent := range c.ParentHashes {
@@ -195,7 +213,7 @@ func serialize(c *Commit) []byte {
 	return buffer.Bytes()
 }
 
-func deserialize(content []byte) (*Commit, error) {
+func deserializeCommit(content []byte) (*Commit, error) {
 	lines := strings.Split(string(content), "\n")
 	msgIndex := -1
 
@@ -236,7 +254,7 @@ func deserialize(content []byte) (*Commit, error) {
 		commit.Message = strings.Join(lines[msgIndex:], "\n")
 	}
 
-	if err := commit.validate(); err != nil {
+	if err := validateCommit(commit); err != nil {
 		return nil, err
 	}
 
@@ -245,18 +263,18 @@ func deserialize(content []byte) (*Commit, error) {
 }
 
 // Extracts the user info and timestamp from the serialized commit
-func parseUser(line string) (User, error) {
+func parseUser(line string) (*User, error) {
 	parts := strings.Fields(line)
 	if len(parts) < 3 {
-		return User{}, fmt.Errorf("invalid user: %s", line)
+		return nil, fmt.Errorf("invalid user: %s", line)
 	}
 	ts, err := strconv.ParseInt(parts[len(parts)-2], 10, 64)
 	if err != nil {
-		return User{}, fmt.Errorf("invalid timestamp in user: %w", err)
+		return nil, fmt.Errorf("invalid timestamp in user: %w", err)
 	}
 	tz := parts[len(parts)-1]
 	info := strings.Join(parts[:len(parts)-2], " ")
-	return User{
+	return &User{
 		Info:      info,
 		Timestamp: ts,
 		TZ:        tz,
@@ -264,18 +282,18 @@ func parseUser(line string) (User, error) {
 }
 
 // validate checks that a commit is valid
-func (c *Commit) validate() error {
+func validateCommit(c *Commit) error {
 	if c.TreeHash == "" {
 		return fmt.Errorf("tree hash required")
 	}
 	if len(c.TreeHash) != 40 {
 		return fmt.Errorf("invalid tree hash length: %d", len(c.TreeHash))
 	}
-	if err := c.Author.validate(); err != nil {
+	if err := validateUser(c.Author); err != nil {
 		return fmt.Errorf("author required: %v", err)
 	}
 	if c.Message == "" {
-		return fmt.Errorf("message required")
+		return fmt.Errorf("commit message required")
 	}
 	for _, p := range c.ParentHashes {
 		if len(p) != 40 {
@@ -288,8 +306,8 @@ func (c *Commit) validate() error {
 type CommitBuilder struct {
 	treeHash     string
 	parentHashes []string
-	author       User
-	committer    User
+	author       *User
+	committer    *User
 	message      string
 }
 
