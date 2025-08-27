@@ -26,7 +26,7 @@ type Tree struct {
 func BuildTree(entries []TreeEntry) (*Tree, error) {
 	// validate the tree entries
 	for _, entry := range entries {
-		if err := validateEntry(entry); err != nil {
+		if err := validateTreeEntry(entry); err != nil {
 			return nil, fmt.Errorf("invalid tree entry %s: %v", entry.Name, err)
 		}
 	}
@@ -38,25 +38,22 @@ func BuildTree(entries []TreeEntry) (*Tree, error) {
 		entries: entries,
 	}
 
-	// serialize entries to object content
-	tree.updateContent()
+	tree.objectContent = serializeTree(tree)
 	tree.hash = tree.BaseObject.Hash()
 
 	return tree, nil
 }
 
-// ParseTree reconstructs a Tree from its raw binary encoding
+// ParseTree reconstructs a Tree from its serialized tree content
 func ParseTree(content []byte) (*Tree, error) {
-	entries, err := deserializeEntries(content)
+	tree, err := deserializeTree(content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tree: %w", err)
 	}
-	tree := &Tree{
-		BaseObject: &BaseObject{
-			objectType:    TreeType,
-			objectContent: bytes.Clone(content),
-		},
-		entries: entries,
+
+	tree.BaseObject = &BaseObject{
+		objectType:    TreeType,
+		objectContent: bytes.Clone(content),
 	}
 
 	tree.hash = tree.BaseObject.Hash()
@@ -69,7 +66,7 @@ func (t *Tree) MakeEntry(mode, name, hash string) error {
 	entry := TreeEntry{Mode: mode, Name: name, Hash: hash}
 
 	// validate the entry
-	if err := validateEntry(entry); err != nil {
+	if err := validateTreeEntry(entry); err != nil {
 		return err
 	}
 
@@ -77,14 +74,15 @@ func (t *Tree) MakeEntry(mode, name, hash string) error {
 	for i, e := range t.entries {
 		if e.Name == name {
 			t.entries[i] = entry
-			t.updateContent()
+			t.objectContent = serializeTree(t)
 			return nil
 		}
 	}
 
 	// else, append
 	t.entries = append(t.entries, entry)
-	t.updateContent()
+	t.objectContent = serializeTree(t)
+	t.hash = t.BaseObject.Hash()
 
 	return nil
 }
@@ -147,17 +145,12 @@ func (t *Tree) Clone() *Tree {
 	return clone
 }
 
-// updateContent sorts and and rebuilds the serialized object content
-func (t *Tree) updateContent() {
+// Encodes the slice of entries into raw tree entry format: "<mode> <name>\0<20-byte raw sha1>"
+func serializeTree(t *Tree) []byte {
 	sort.Slice(t.entries, func(i, j int) bool {
 		return t.entries[i].Name < t.entries[j].Name
 	})
 
-	t.objectContent = t.serializeEntries()
-}
-
-// serializeEntries encodes a slice of entries into Git's raw tree format: "<mode> <name>\0<20-byte raw sha1>"
-func (t *Tree) serializeEntries() []byte {
 	var buffer bytes.Buffer
 	for _, entry := range t.entries {
 		buffer.WriteString(fmt.Sprintf("%s %s\x00", entry.Mode, entry.Name))
@@ -170,9 +163,11 @@ func (t *Tree) serializeEntries() []byte {
 	return buffer.Bytes()
 }
 
-// deserializeEntries decodes raw Git tree data back into TreeEntry structs
-func deserializeEntries(content []byte) ([]TreeEntry, error) {
-	var entries []TreeEntry
+// Decodes raw Tree data back into Tree struct
+func deserializeTree(content []byte) (*Tree, error) {
+	tree := &Tree{
+		entries: make([]TreeEntry, 0),
+	}
 
 	for i := 0; i < len(content); {
 		// find the next null byte
@@ -199,7 +194,7 @@ func deserializeEntries(content []byte) ([]TreeEntry, error) {
 		hash := hex.EncodeToString(content[hashStart:hashEnd])
 
 		// append the entry
-		entries = append(entries, TreeEntry{
+		tree.entries = append(tree.entries, TreeEntry{
 			Mode: mode,
 			Name: name,
 			Hash: hash,
@@ -209,16 +204,16 @@ func deserializeEntries(content []byte) ([]TreeEntry, error) {
 		i = hashEnd
 	}
 
-	return entries, nil
+	return tree, nil
 }
 
 /*
-validateEntry checks that an entry is valid according to Git rules:
+validateTreeEntry checks that an entry is valid according to Git rules:
   - Name is non-empty and cannot contain '/'
   - Hash is exactly 40 hex chars
   - Mode is one of Git's supported ones (file, executable, directory)
 */
-func validateEntry(entry TreeEntry) error {
+func validateTreeEntry(entry TreeEntry) error {
 	if entry.Name == "" {
 		return fmt.Errorf("name cannot be empty")
 	}
@@ -235,3 +230,6 @@ func validateEntry(entry TreeEntry) error {
 	}
 	return nil
 }
+
+// Ensure Tree implements GitObject
+var _ GitObject = (*Tree)(nil)
