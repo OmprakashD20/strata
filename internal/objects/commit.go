@@ -227,6 +227,7 @@ type CommitBuilder struct {
 func NewCommitBuilder() *CommitBuilder {
 	return &CommitBuilder{
 		parentHashes: make([]string, 0),
+		author:       &User{},
 	}
 }
 
@@ -248,6 +249,9 @@ func (b *CommitBuilder) WithAuthor(info string) *CommitBuilder {
 }
 
 func (b *CommitBuilder) WithCommitter(info string) *CommitBuilder {
+	if b.committer == nil {
+		b.committer = &User{}
+	}
 	b.committer.Info = info
 	b.committer.Timestamp = time.Now().Unix()
 	b.committer.TZ = utils.FormatTimezoneOffset(time.Now())

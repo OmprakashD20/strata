@@ -77,9 +77,9 @@ func (t *Tag) String() string {
 
 func serializeTag(t *Tag) []byte {
 	var buffer bytes.Buffer
-	buffer.WriteString(fmt.Sprintf("object hash %s\n", t.ObjectHash))
-	buffer.WriteString(fmt.Sprintf("tag type %s\n", t.TagType))
-	buffer.WriteString(fmt.Sprintf("tag name %s\n", t.TagName))
+	buffer.WriteString(fmt.Sprintf("object %s\n", t.ObjectHash))
+	buffer.WriteString(fmt.Sprintf("tag %s\n", t.TagType))
+	buffer.WriteString(fmt.Sprintf("name %s\n", t.TagName))
 	buffer.WriteString(fmt.Sprintf("tagger %s\n", t.Tagger))
 	buffer.WriteString("\n")
 	buffer.WriteString(t.Message)
@@ -100,12 +100,12 @@ func deserializeTag(content []byte) (*Tag, error) {
 		}
 
 		switch {
-		case strings.HasPrefix(line, "object hash "):
-			tag.ObjectHash = strings.TrimPrefix(line, "object hash ")
-		case strings.HasPrefix(line, "tag type "):
-			tag.TagType = strings.TrimPrefix(line, "tag type ")
-		case strings.HasPrefix(line, "tag name "):
-			tag.TagName = strings.TrimPrefix(line, "tag name ")
+		case strings.HasPrefix(line, "object "):
+			tag.ObjectHash = strings.TrimPrefix(line, "object ")
+		case strings.HasPrefix(line, "tag "):
+			tag.TagType = strings.TrimPrefix(line, "tag ")
+		case strings.HasPrefix(line, "name "):
+		tag.TagName = strings.TrimPrefix(line, "name ")
 		case strings.HasPrefix(line, "tagger "):
 			user, err := parseUser(strings.TrimPrefix(line, "tagger "))
 			if err != nil {
@@ -129,13 +129,13 @@ func deserializeTag(content []byte) (*Tag, error) {
 // Checks that if a tag is valid
 func validateTag(tag *Tag) error {
 	if len(tag.ObjectHash) != 40 {
-		return fmt.Errorf("invalid object hash length")
+		return fmt.Errorf("invalid object")
 	}
 	if tag.TagType == "" {
-		return fmt.Errorf("tag type required")
+		return fmt.Errorf("type required")
 	}
 	if tag.TagName == "" {
-		return fmt.Errorf("tag name required")
+		return fmt.Errorf("name required")
 	}
 	if tag.Tagger == nil {
 		return fmt.Errorf("tagger required")
@@ -155,12 +155,14 @@ type TagBuilder struct {
 }
 
 func NewTagBuilder() *TagBuilder {
-	return &TagBuilder{}
+	return &TagBuilder{
+		tagger: &User{},
+	}
 }
 
-func (b *TagBuilder) WithObject(objectHash, objectType string) *TagBuilder {
+func (b *TagBuilder) WithObject(objectHash, tagType string) *TagBuilder {
 	b.objectHash = objectHash
-	b.tagType = objectType
+	b.tagType = tagType
 	return b
 }
 
