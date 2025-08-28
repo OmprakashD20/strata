@@ -113,6 +113,8 @@ func Deserialize(data []byte) (GitObject, error) {
 		return ParseTree(content)
 	case CommitType:
 		return ParseCommit(content)
+	case TagType:
+   	 	return ParseTag(content)
 	default:
 		return nil, fmt.Errorf("unsupported object type: %s", objectType)
 	}
