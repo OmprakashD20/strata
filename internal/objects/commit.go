@@ -53,7 +53,7 @@ func BuildCommit(treeHash string, parentHashes []string, author, committer *User
 func ParseCommit(content []byte) (*Commit, error) {
 	commit, err := deserializeCommit(content)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse commit: %w", err)
+		return nil, fmt.Errorf("failed to parse commit: %v", err)
 	}
 
 	commit.BaseObject = &BaseObject{

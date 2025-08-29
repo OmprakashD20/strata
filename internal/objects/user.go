@@ -54,7 +54,7 @@ func parseUser(line string) (*User, error) {
 
 	ts, err := strconv.ParseInt(parts[len(parts)-2], 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid timestamp in user: %w", err)
+		return nil, fmt.Errorf("invalid timestamp in user: %v", err)
 	}
 
 	tz := parts[len(parts)-1]

@@ -48,7 +48,7 @@ func BuildTag(objectHash, tagType, tagName, message string, tagger *User) (*Tag,
 func ParseTag(content []byte) (*Tag, error) {
 	tag, err := deserializeTag(content)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse tag: %w", err)
+		return nil, fmt.Errorf("failed to parse tag: %v", err)
 	}
 
 	tag.BaseObject = &BaseObject{

@@ -44,7 +44,7 @@ func BuildTree(entries []TreeEntry) (*Tree, error) {
 func ParseTree(content []byte) (*Tree, error) {
 	tree, err := deserializeTree(content)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse tree: %w", err)
+		return nil, fmt.Errorf("failed to parse tree: %v", err)
 	}
 
 	tree.BaseObject = &BaseObject{
