@@ -14,3 +14,18 @@ func IsValidHash(hash string) bool {
     }
     return true
 }
+
+// Compares two SHA-1 hashes and returns true if they are equal
+func CompareHashes(hash1, hash2 string) bool {
+	if len(hash1) != len(hash2) {
+		return false
+	}
+	
+	for i := range hash1 {
+		if hash1[i] != hash2[i] {
+			return false
+		}
+	}
+	
+	return true
+}
