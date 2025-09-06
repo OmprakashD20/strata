@@ -161,19 +161,19 @@ func (entry *IndexEntry) ToggleSkipWorktree() {
 	}
 }
 
-// Returns true if the file is executable
-func (entry *IndexEntry) IsExecutable() bool {
-	return entry.FileMode&ExecFile != 0
-}
-
 // Returns true if it is a regular file
 func (entry *IndexEntry) IsRegularFile() bool {
 	return entry.FileMode&FileTypeMask == RegularFile&FileTypeMask
 }
 
+// Returns true if the file is executable
+func (entry *IndexEntry) IsExecutable() bool {
+	return entry.IsRegularFile() && (entry.FileMode&ExecFile != 0)
+}
+
 // Returns true if it is a symlink
 func (entry *IndexEntry) IsSymlink() bool {
-	return entry.FileMode&FileTypeMask == SymlinkFile
+	return entry.FileMode&FileTypeMask == SymlinkFile&FileTypeMask
 }
 
 // Returns the string representation of an index entry
