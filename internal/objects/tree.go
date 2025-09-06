@@ -10,7 +10,7 @@ import (
 
 // TreeEntry represents a single entry in a Tree object
 type TreeEntry struct {
-	Mode string // file mode: "100644" (file), "100755" (executable), "40000" (directory)
+	Mode string // file mode: "100644" (file), "100755" (executable), "120000" (symlink), "40000" (directory)
 	Name string // filename or directory name
 	Hash string // sha-1 hash of the referenced object (blob or tree)
 }
@@ -191,7 +191,7 @@ func validateTree(tree *Tree) error {
 
 		// Validate Mode
 		switch entry.Mode {
-		case "100644", "100755", "40000": // file, executable, directory
+		case "100644", "100755", "120000", "40000": // file, executable, symlink, directory
 		default:
 			errorMsgs = append(errorMsgs, fmt.Sprintf("invalid mode %s", entry.Mode))
 		}
