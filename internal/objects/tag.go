@@ -140,7 +140,7 @@ func validateTag(tag *Tag) error {
 	if tag.Tagger == nil {
 		return fmt.Errorf("tagger required")
 	}
-	if err := validateUser(tag.Tagger); err != nil {
+	if err := tag.Tagger.Validate(); err != nil {
 		return err
 	}
 	return nil

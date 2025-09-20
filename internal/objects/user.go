@@ -13,6 +13,20 @@ type User struct {
 	TZ        string // time zone of the user
 }
 
+func NewUser(info string, timestamp int64, TZ string) (*User, error) {
+	user := &User{
+		Info:      info,
+		Timestamp: timestamp,
+		TZ:        TZ,
+	}
+
+	if err := user.Validate(); err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
 func (u *User) String() string {
 	if u == nil {
 		return "User{nil}"
@@ -21,7 +35,7 @@ func (u *User) String() string {
 	return fmt.Sprintf("%s %d %s", u.Info, u.Timestamp, u.TZ)
 }
 
-func validateUser(user *User) error {
+func(user *User) Validate() error {
 	if user == nil {
 		return fmt.Errorf("user required")
 	}

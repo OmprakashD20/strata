@@ -666,15 +666,15 @@ func (index *Index) Save() error {
 }
 
 // AddFile adds a file to the index
-func (index *Index) AddFile(workingDir, path string) error {
+func (index *Index) AddFile(workingDir, path string) (*objects.Blob, error) {
 	if path == "" {
-		return fmt.Errorf("path cannot be empty")
+		return nil, fmt.Errorf("path cannot be empty")
 	}
 
 	// normalize the file path
 	normalizedPath := strings.ReplaceAll(path, "\\", "/")
 	if strings.HasPrefix(normalizedPath, "/") {
-		return fmt.Errorf("'%s' is outside repository", path)
+		return nil, fmt.Errorf("'%s' is outside repository", path)
 	}
 
 	fullPath := filepath.Join(workingDir, path)
@@ -683,13 +683,13 @@ func (index *Index) AddFile(workingDir, path string) error {
 	info, err := os.Lstat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("pathspec '%s' did not match any files", path)
+			return nil, fmt.Errorf("pathspec '%s' did not match any files", path)
 		}
-		return fmt.Errorf("unable to stat '%s': %v", path, err)
+		return nil, fmt.Errorf("unable to stat '%s': %v", path, err)
 	}
 
 	if info.IsDir() {
-		return fmt.Errorf("'%s' is a directory", path)
+		return nil, fmt.Errorf("'%s' is a directory", path)
 	}
 
 	var content []byte
@@ -699,7 +699,7 @@ func (index *Index) AddFile(workingDir, path string) error {
 	case info.Mode().IsRegular(): // regular file
 		content, err = os.ReadFile(fullPath)
 		if err != nil {
-			return fmt.Errorf("unable to read '%s': %v", path, err)
+			return nil, fmt.Errorf("unable to read '%s': %v", path, err)
 		}
 
 		mode = RegularFile
@@ -710,16 +710,16 @@ func (index *Index) AddFile(workingDir, path string) error {
 	case info.Mode()&os.ModeSymlink != 0: // symlink
 		target, err := os.Readlink(fullPath)
 		if err != nil {
-			return fmt.Errorf("unable to read symlink '%s': %v", path, err)
+			return nil, fmt.Errorf("unable to read symlink '%s': %v", path, err)
 		}
 		content = []byte(target)
 		mode = SymlinkFile
 
 	case info.Mode().IsDir(): // directory
-		return fmt.Errorf("'%s' is a directory", path)
+		return nil, fmt.Errorf("'%s' is a directory", path)
 
 	default:
-		return fmt.Errorf("'%s' has an unsupported file type", path)
+		return nil, fmt.Errorf("'%s' has an unsupported file type", path)
 	}
 
 	blob := objects.NewBlob(content)
@@ -727,7 +727,7 @@ func (index *Index) AddFile(workingDir, path string) error {
 	// get the system-specific metadata
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
-		return fmt.Errorf("unable to get file system metadata")
+		return nil, fmt.Errorf("unable to get file system metadata")
 	}
 
 	// convert syscall timestamps to time.Time
@@ -751,7 +751,7 @@ func (index *Index) AddFile(workingDir, path string) error {
 	// set flags (stage 0, path length)
 	pathLen := len(normalizedPath)
 	if pathLen >= NameMask {
-		return fmt.Errorf("path too long: %s", path)
+		return nil, fmt.Errorf("path too long: %s", path)
 	}
 	entry.Flags = uint16(pathLen)
 
@@ -769,7 +769,7 @@ func (index *Index) AddFile(workingDir, path string) error {
 	// add the entry to index
 	index.SetEntry(normalizedPath, entry)
 
-	return nil
+	return blob, nil
 }
 
 // AddIntentToAdd adds a file to the index with intent to add flag
@@ -866,13 +866,13 @@ func (index *Index) AddIntentToAdd(workingDir, path string) error {
 }
 
 // buildTree builds a tree object from the current index
-func (index *Index) buildTree() (string, error) {
+func (index *Index) buildTree() (*objects.Tree, error) {
 	if len(index.entries) == 0 {
-		return "", fmt.Errorf("unable to write initial tree: empty index")
+		return nil, fmt.Errorf("unable to write initial tree: empty index")
 	}
 
 	// build nested directory structure from flat index paths
-	// example: "cnd/main.go" becomes nested map: {"cmd": {"main.go": [IndexEntry]}}
+	// example: "cmd/main.go" becomes nested map: {"cmd": {"main.go": [IndexEntry]}}
 	rootDir := make(map[string]any)
 
 	for _, entry := range index.Entries() {
@@ -895,14 +895,14 @@ func (index *Index) buildTree() (string, error) {
 			var ok bool
 			currentDir, ok = currentDir[part].(map[string]any)
 			if !ok {
-				return "", fmt.Errorf("path conflict at '%s'", strings.Join(parts[:i+1], "/"))
+				return nil, fmt.Errorf("path conflict at '%s'", strings.Join(parts[:i+1], "/"))
 			}
 		}
 
 		// append the file to the directory
 		file := parts[len(parts)-1]
 		if currentDir[file] != nil {
-			return "", fmt.Errorf("path conflict at '%s'", entry.Path)
+			return nil, fmt.Errorf("path conflict at '%s'", entry.Path)
 		}
 		currentDir[file] = entry
 	}
@@ -911,9 +911,9 @@ func (index *Index) buildTree() (string, error) {
 }
 
 // Converts a directory into a tree object
-func buildTreeFromDirectory(index *Index, directory map[string]any) (string, error) {
+func buildTreeFromDirectory(index *Index, directory map[string]any) (*objects.Tree, error) {
 	if len(directory) == 0 {
-		return "", fmt.Errorf("empty directory")
+		return nil, fmt.Errorf("empty directory")
 	}
 
 	var entries []objects.TreeEntry
@@ -939,7 +939,7 @@ func buildTreeFromDirectory(index *Index, directory map[string]any) (string, err
 			} else if v.IsSymlink() {
 				mode = strconv.FormatUint(uint64(SymlinkFile&0o777777), 8)
 			} else {
-				return "", fmt.Errorf("unsupported file mode: %o", v.FileMode)
+				return nil, fmt.Errorf("unsupported file mode: %o", v.FileMode)
 			}
 
 			entries = append(entries, objects.TreeEntry{
@@ -949,29 +949,29 @@ func buildTreeFromDirectory(index *Index, directory map[string]any) (string, err
 			})
 
 		case map[string]any: // a subdirectory
-			hash, err := buildTreeFromDirectory(index, v)
+			tree, err := buildTreeFromDirectory(index, v)
 			if err != nil {
-				return "", fmt.Errorf("failed to create subtree '%s': %v", name, err)
+				return nil, fmt.Errorf("failed to create subtree '%s': %v", name, err)
 			}
 
 			entries = append(entries, objects.TreeEntry{
 				Mode: "40000", // directory mode
 				Name: name,
-				Hash: hash,
+				Hash: tree.Hash(),
 			})
 
 		default:
-			return "", fmt.Errorf("invalid directory item type for '%s'", name)
+			return nil, fmt.Errorf("invalid directory item type for '%s'", name)
 		}
 	}
 
 	tree, err := objects.BuildTree(entries)
 	if err != nil {
-		return "", fmt.Errorf("failed to build index tree: %v", err)
+		return nil, fmt.Errorf("failed to build index tree: %v", err)
 	}
 
 	// return the SHA-1 hash of the index tree
-	return tree.Hash(), nil
+	return tree, nil
 }
 
 // StatusInfo represents the status of a file in the index
@@ -1038,19 +1038,24 @@ func NewIndexManager(workingDir, gitDir string) (*IndexManager, error) {
 }
 
 // AddFile adds a single file to the index
-func (im *IndexManager) AddFile(path string) error {
+func (im *IndexManager) AddFile(path string) (*objects.Blob, error) {
 	// load the index from disk
 	if err := im.Index().Load(); err != nil {
-		return err
+		return nil, err
 	}
 
 	// add the file to the index
-	if err := im.Index().AddFile(im.WorkingDir(), path); err != nil {
-		return fmt.Errorf("failed to add '%s': %v", path, err)
+	blob, err := im.Index().AddFile(im.WorkingDir(), path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add '%s': %v", path, err)
 	}
 
 	// save the index to disk
-	return im.Index().Save()
+	if err := im.Index().Save(); err != nil {
+		return nil, fmt.Errorf("failed to save index: %v", err)
+	}
+
+	return blob, nil
 }
 
 // AddIntentToAdd adds a file with the intent to add flag
@@ -1070,21 +1075,28 @@ func (im *IndexManager) AddIntentToAdd(path string) error {
 }
 
 // AddFiles add multiple files to the index
-func (im *IndexManager) AddFiles(paths []string) error {
+func (im *IndexManager) AddFiles(paths []string) ([]*objects.Blob, error) {
 	// load the index from disk
 	if err := im.Index().Load(); err != nil {
-		return err
+		return nil, err
 	}
 
 	// add the files to the index
+	var blobs []*objects.Blob
 	for _, path := range paths {
-		if err := im.Index().AddFile(im.WorkingDir(), path); err != nil {
-			return fmt.Errorf("failed to add '%s': %v", path, err)
+		blob, err := im.Index().AddFile(im.WorkingDir(), path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add '%s': %v", path, err)
 		}
+		blobs = append(blobs, blob)
 	}
 
 	// save the index to disk
-	return im.Index().Save()
+	if err := im.Index().Save(); err != nil {
+		return nil, fmt.Errorf("failed to save index: %v", err)
+	}
+
+	return blobs, nil
 }
 
 // SetAssumeUnchanged sets or clears the assume unchanged flag for a file in the index
@@ -1432,10 +1444,10 @@ func (im *IndexManager) ListStagedPath() ([]string, error) {
 }
 
 // BuildTree builds a tree object from the current index
-func (im *IndexManager) BuildTree() (string, error) {
+func (im *IndexManager) BuildTree() (*objects.Tree, error) {
 	// load the index from disk
 	if err := im.index.Load(); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	return im.index.buildTree()

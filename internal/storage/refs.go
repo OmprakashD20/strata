@@ -46,7 +46,6 @@ func (r *RefManager) ReadRef(ref string) (string, error) { // todo: avoid any ci
 	}
 
 	return content, nil
-
 }
 
 // UpdateRef updates a git ref with the specified commit hash

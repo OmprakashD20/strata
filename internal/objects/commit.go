@@ -202,7 +202,7 @@ func validateCommit(c *Commit) error {
 	if len(c.TreeHash) != 40 {
 		return fmt.Errorf("invalid tree hash length: %d", len(c.TreeHash))
 	}
-	if err := validateUser(c.Author); err != nil {
+	if err := c.Author.Validate(); err != nil {
 		return fmt.Errorf("author required: %v", err)
 	}
 	if c.Message == "" {
