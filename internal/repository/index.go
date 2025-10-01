@@ -13,10 +13,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/OmprakashD20/strata/internal/objects"
+	"github.com/OmprakashD20/strata/internal/utils"
 )
 
 const (
@@ -725,24 +725,20 @@ func (index *Index) AddFile(workingDir, path string) (*objects.Blob, error) {
 	blob := objects.NewBlob(content)
 
 	// get the system-specific metadata
-	stat, ok := info.Sys().(*syscall.Stat_t)
+	fileStat, ok := utils.ExtractFileStat(info)
 	if !ok {
 		return nil, fmt.Errorf("unable to get file system metadata")
 	}
 
-	// convert syscall timestamps to time.Time
-	ctime := time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
-	mtime := time.Unix(int64(stat.Mtimespec.Sec), int64(stat.Mtimespec.Nsec))
-
 	// create the index entry with file metadata
 	entry := &IndexEntry{
-		CTime:    ctime,
-		MTime:    mtime,
-		Device:   uint32(stat.Dev),
-		Inode:    uint32(stat.Ino),
+		CTime:    fileStat.CTime,
+		MTime:    fileStat.MTime,
+		Device:   fileStat.Device,
+		Inode:    fileStat.Inode,
 		FileMode: mode,
-		UID:      stat.Uid,
-		GID:      stat.Gid,
+		UID:      fileStat.UID,
+		GID:      fileStat.GID,
 		Size:     uint32(blob.Size()),
 		Path:     normalizedPath,
 		Hash:     blob.Hash(),
@@ -818,24 +814,20 @@ func (index *Index) AddIntentToAdd(workingDir, path string) error {
 	blob := objects.NewBlob([]byte{})
 
 	// get the system-specific metadata
-	stat, ok := info.Sys().(*syscall.Stat_t)
+	fileStat, ok := utils.ExtractFileStat(info)
 	if !ok {
 		return fmt.Errorf("unable to get file system metadata")
 	}
 
-	// convert syscall timestamps to time.Time
-	ctime := time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
-	mtime := time.Unix(int64(stat.Mtimespec.Sec), int64(stat.Mtimespec.Nsec))
-
 	// create the index entry with file metadata
 	entry := &IndexEntry{
-		CTime:    ctime,
-		MTime:    mtime,
-		Device:   uint32(stat.Dev),
-		Inode:    uint32(stat.Ino),
+		CTime:    fileStat.CTime,
+		MTime:    fileStat.MTime,
+		Device:   fileStat.Device,
+		Inode:    fileStat.Inode,
 		FileMode: mode,
-		UID:      stat.Uid,
-		GID:      stat.Gid,
+		UID:      fileStat.UID,
+		GID:      fileStat.GID,
 		Size:     uint32(blob.Size()),
 		Path:     normalizedPath,
 		Hash:     blob.Hash(),
@@ -1352,12 +1344,16 @@ func isFileModified(entry *IndexEntry, info os.FileInfo, path string) bool {
 		return true
 	}
 
-	stat, _ := info.Sys().(*syscall.Stat_t)
+	fileStat, ok := utils.ExtractFileStat(info)
+	if !ok {
+		// If we can't get file stat, fall back to content comparison
+		return isContentModified(entry, path)
+	}
 
 	// check modification time
-	if uint32(stat.Mtimespec.Sec) == uint32(entry.MTime.Unix()) && uint32(stat.Mtimespec.Nsec) == uint32(entry.MTime.Nanosecond()) {
+	if fileStat.MTime.Equal(entry.MTime) {
 		// check additional metadata
-		if uint32(stat.Ino) == entry.Inode && uint32(stat.Dev) == entry.Device && uint32(info.Size()) == entry.Size {
+		if fileStat.Inode == entry.Inode && fileStat.Device == entry.Device && uint32(info.Size()) == entry.Size {
 			return false
 		}
 	}
@@ -1622,18 +1618,18 @@ func (im *IndexManager) RefreshIndex() (int, error) {
 		// only refresh if content hasn't changed
 		if !isFileModified(entry, info, path) {
 			// get system-specific metadata
-			stat, ok := info.Sys().(*syscall.Stat_t)
+			fileStat, ok := utils.ExtractFileStat(info)
 			if !ok {
 				continue // skip if metadata unavailable
 			}
 
 			// update the index entry metadata
-			entry.MTime = time.Unix(int64(stat.Mtimespec.Sec), int64(stat.Mtimespec.Nsec))
-			entry.CTime = time.Unix(int64(stat.Ctimespec.Sec), int64(stat.Ctimespec.Nsec))
-			entry.Device = uint32(stat.Dev)
-			entry.Inode = uint32(stat.Ino)
-			entry.UID = stat.Uid
-			entry.GID = stat.Gid
+			entry.MTime = fileStat.MTime
+			entry.CTime = fileStat.CTime
+			entry.Device = fileStat.Device
+			entry.Inode = fileStat.Inode
+			entry.UID = fileStat.UID
+			entry.GID = fileStat.GID
 
 			// update the size for regular files
 			if entry.IsRegularFile() {
