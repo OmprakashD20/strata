@@ -36,7 +36,7 @@ func BuildCommit(treeHash string, parentHashes []string, author, committer *User
 	}
 
 	// validate the fields
-	if err := validateCommit(commit); err != nil {
+	if err := commit.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -187,7 +187,7 @@ func deserializeCommit(content []byte) (*Commit, error) {
 		commit.Message = strings.Join(lines[msgIndex:], "\n")
 	}
 
-	if err := validateCommit(commit); err != nil {
+	if err := commit.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -195,7 +195,7 @@ func deserializeCommit(content []byte) (*Commit, error) {
 }
 
 // Checks that a commit is valid
-func validateCommit(c *Commit) error {
+func (c *Commit) Validate() error {
 	if c.TreeHash == "" {
 		return fmt.Errorf("tree hash required")
 	}

@@ -27,6 +27,7 @@ func NewUser(info string, timestamp int64, TZ string) (*User, error) {
 	return user, nil
 }
 
+// Returns a string representation of the user
 func (u *User) String() string {
 	if u == nil {
 		return "User{nil}"
@@ -35,7 +36,8 @@ func (u *User) String() string {
 	return fmt.Sprintf("%s %d %s", u.Info, u.Timestamp, u.TZ)
 }
 
-func(user *User) Validate() error {
+// Checks that an user is valid
+func (user *User) Validate() error {
 	if user == nil {
 		return fmt.Errorf("user required")
 	}

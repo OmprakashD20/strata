@@ -31,7 +31,7 @@ func BuildTag(objectHash, tagType, tagName, message string, tagger *User) (*Tag,
 	}
 
 	// validate the tag
-	if err := validateTag(tag); err != nil {
+	if err := tag.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +105,7 @@ func deserializeTag(content []byte) (*Tag, error) {
 		case strings.HasPrefix(line, "tag "):
 			tag.TagType = strings.TrimPrefix(line, "tag ")
 		case strings.HasPrefix(line, "name "):
-		tag.TagName = strings.TrimPrefix(line, "name ")
+			tag.TagName = strings.TrimPrefix(line, "name ")
 		case strings.HasPrefix(line, "tagger "):
 			user, err := parseUser(strings.TrimPrefix(line, "tagger "))
 			if err != nil {
@@ -119,7 +119,7 @@ func deserializeTag(content []byte) (*Tag, error) {
 		tag.Message = strings.Join(lines[msgIndex:], "\n")
 	}
 
-	if err := validateTag(tag); err != nil {
+	if err := tag.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -127,7 +127,7 @@ func deserializeTag(content []byte) (*Tag, error) {
 }
 
 // Checks that if a tag is valid
-func validateTag(tag *Tag) error {
+func (tag *Tag) Validate() error {
 	if len(tag.ObjectHash) != 40 {
 		return fmt.Errorf("invalid object")
 	}

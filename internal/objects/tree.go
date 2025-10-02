@@ -31,7 +31,7 @@ func BuildTree(entries []TreeEntry) (*Tree, error) {
 	}
 
 	// validate the tree entries
-	if err := validateTree(tree); err != nil {
+	if err := tree.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -59,7 +59,7 @@ func ParseTree(content []byte) (*Tree, error) {
 func (t *Tree) MakeEntry(mode, name, hash string) error {
 	entry := TreeEntry{Mode: mode, Name: name, Hash: hash}
 
-	if err := validateTree(t); err != nil {
+	if err := t.Validate(); err != nil {
 		return err
 	}
 
@@ -167,13 +167,8 @@ func deserializeTree(content []byte) (*Tree, error) {
 	return tree, nil
 }
 
-/*
-validateTree checks that a tree's entries are valid, according to Git rules:
-  - Name is non-empty and cannot contain '/'
-  - Hash is exactly 40 hex chars
-  - Mode is one of Git's supported ones (file, executable, directory)
-*/
-func validateTree(tree *Tree) error {
+// Checks that a tree is valid
+func (tree *Tree) Validate() error {
 	for _, entry := range tree.Entries() {
 		var errorMsgs []string
 
@@ -201,7 +196,6 @@ func validateTree(tree *Tree) error {
 		}
 	}
 
-	// Return nil if everything is valid
 	return nil
 }
 

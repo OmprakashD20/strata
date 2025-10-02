@@ -104,7 +104,6 @@ func Deserialize(data []byte) (GitObject, error) {
 		return nil, fmt.Errorf("content size mismatch: expected %s, got %d", headerParts[1], len(content))
 	}
 
-	// todo: implement for other object types (tag)
 	// create the GitObject based on the type
 	switch objectType {
 	case BlobType:
@@ -114,7 +113,7 @@ func Deserialize(data []byte) (GitObject, error) {
 	case CommitType:
 		return ParseCommit(content)
 	case TagType:
-   	 	return ParseTag(content)
+		return ParseTag(content)
 	default:
 		return nil, fmt.Errorf("unsupported object type: %s", objectType)
 	}
