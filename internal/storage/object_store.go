@@ -76,35 +76,24 @@ func (s *ObjectStore) ReadObject(hash string) (objects.GitObject, error) {
 
 	dir := filepath.Join(s.path, hash[:2])
 
+	// try as full hash
 	if len(hash) == 40 {
 		file := filepath.Join(dir, hash[2:])
 		return s.LoadObject(file)
 	}
 
-	if len(hash) == 2 {
-		entries, err := os.ReadDir(dir)
+	// try as short hash
+	if len(hash) == 4 {
+		match, err := s.ResolveHash(hash)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read object directory: %v", err)
+			return nil, err
 		}
 
-		var matches []string
-		for _, entry := range entries {
-			if strings.HasPrefix(entry.Name(), hash[2:]) {
-				matches = append(matches, entry.Name())
-			}
-		}
-
-		if len(matches) == 0 {
-			return nil, fmt.Errorf("object not found: %s", hash)
-		}
-		if len(matches) > 1 {
-			return nil, fmt.Errorf("ambiguous hash: %s matches %v", hash, matches)
-		}
-
-		file := filepath.Join(dir, matches[0])
+		file := filepath.Join(dir, match)
 		return s.LoadObject(file)
 	}
 
+	// hash length > 40
 	return nil, fmt.Errorf("invalid: hash length, %s", hash)
 }
 
@@ -160,4 +149,40 @@ func fileExists(filePath string) bool {
 	_, err := os.Stat(filePath)
 
 	return err == nil
+}
+
+// Expands a short commit hash to a full hash
+func (s *ObjectStore) ResolveHash(hash string) (string, error) {
+	if len(hash) < 4 {
+		return "", fmt.Errorf("invalid: hash too short, %s", hash)
+	}
+
+	dir := filepath.Join(s.path, hash[:2])
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("no object found matching: %s", hash)
+		}
+		return "", fmt.Errorf("failed to read object directory: %w", err)
+	}
+
+	prefix := hash[2:]
+	var matches []string
+
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), prefix) {
+			hash := hash[:2] + entry.Name()
+			matches = append(matches, hash)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no object found matching: %s", hash)
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("ambiguous hash: %s (matches %d objects)", hash, len(matches))
+	}
+
+	return matches[0], nil
 }

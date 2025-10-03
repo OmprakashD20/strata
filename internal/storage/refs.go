@@ -107,11 +107,7 @@ func (r *RefManager) SetHEAD(target string) error {
 		content = fmt.Sprintf("%s\n", target)
 	} else {
 		// points to a branch
-		// check if the branch exists
 		branchRef := filepath.Join("refs", "heads", target)
-		if !r.Exists(branchRef) {
-			return fmt.Errorf("branch does not exist: %v", target)
-		}
 		content = fmt.Sprintf("ref: %s\n", branchRef)
 	}
 
